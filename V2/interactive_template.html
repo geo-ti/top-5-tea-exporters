@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Follow the Tea</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/deck.gl@9.0.38/dist.min.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f6f5f2;
+  --panel: #ffffff;
+  --border: #e2e0da;
+  --text-primary: #16171a;
+  --text-secondary: #55565c;
+  --text-muted: #7c7d83;
+  --track: #ecebe6;
+  --land: #e2e0d9;
+  --land-edge: #f6f5f2;
+  --land-hover: #d3d0c7;
+  --land-active: #c4c0b4;
+  --arc-alpha: 120;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #13151a;
+    --panel: #181b21;
+    --border: #2d333f;
+    --text-primary: #eef0f3;
+    --text-secondary: #b4bac4;
+    --text-muted: #868d99;
+    --track: #262b34;
+    --land: #232831;
+    --land-edge: #13151a;
+    --land-hover: #303744;
+    --land-active: #3d4655;
+    --arc-alpha: 110;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #13151a;
+  --panel: #181b21;
+  --border: #2d333f;
+  --text-primary: #eef0f3;
+  --text-secondary: #b4bac4;
+  --text-muted: #868d99;
+  --track: #262b34;
+  --land: #232831;
+  --land-edge: #13151a;
+  --land-hover: #303744;
+  --land-active: #3d4655;
+  --arc-alpha: 110;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--page);
+  color: var(--text-primary);
+  font: 14px/1.45 Inter, system-ui, sans-serif;
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+#panel {
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  padding: 22px 20px 16px;
+  overflow-y: auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+#map { position: relative; min-height: 0; min-width: 0; overflow: hidden; }
+.badge { font-size: 12px; color: var(--text-muted); letter-spacing: .02em; }
+h1 {
+  font-family: Fraunces, Georgia, serif;
+  font-weight: 600;
+  font-size: 30px;
+  line-height: 1.1;
+  margin: 2px 0 6px;
+  text-wrap: balance;
+}
+.lede { color: var(--text-secondary); margin: 0; }
+h2 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
+     color: var(--text-muted); margin: 0 0 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--border); background: transparent; color: var(--text-primary);
+  border-radius: 999px; padding: 5px 10px 5px 8px; font: inherit; font-size: 13px; cursor: pointer;
+}
+.chip:hover { background: var(--track); }
+.chip[aria-pressed="true"] { border-color: var(--text-secondary); background: var(--track); }
+.dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.chip small { color: var(--text-muted); font-size: 12px; }
+
+.summary { margin: 0 0 10px; color: var(--text-secondary); }
+.summary b { color: var(--text-primary); font-weight: 600; }
+.rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.row {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center;
+  padding: 5px 6px; border-radius: 6px; cursor: pointer;
+}
+.row:hover { background: var(--track); }
+.row .name { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.row .name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .val { font-variant-numeric: tabular-nums; color: var(--text-secondary); font-size: 13px; }
+.bar { grid-column: 1 / -1; height: 6px; background: var(--track); border-radius: 3px; overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: 0 3px 3px 0; }
+.more { color: var(--text-muted); font-size: 12px; margin: 6px 0 0 6px; }
+.section + .section { margin-top: 14px; }
+
+#reset {
+  align-self: flex-start; font: inherit; font-size: 13px; color: var(--text-primary);
+  background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer;
+}
+#reset[hidden] { display: none; }
+.foot { margin-top: auto; font-size: 11.5px; color: var(--text-muted); border-top: 1px solid var(--border); padding-top: 10px; }
+.foot a { color: inherit; }
+
+.hint {
+  position: absolute; left: 14px; bottom: 12px; font-size: 12px; color: var(--text-muted);
+  background: color-mix(in srgb, var(--panel) 85%, transparent); padding: 4px 8px; border-radius: 6px;
+  pointer-events: none;
+}
+.deck-tooltip {
+  background: var(--panel) !important; color: var(--text-primary) !important;
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px !important;
+  font: 13px/1.4 Inter, system-ui, sans-serif !important; box-shadow: 0 4px 16px rgba(0,0,0,.25);
+}
+.tt-title { font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.tt-sub { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 760px) {
+  body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; height: auto; overflow-x: hidden; overflow-y: auto; }
+  #map { order: 1; height: max(280px, 62vw); }
+  #panel { order: 2; border-right: 0; border-top: 1px solid var(--border); padding: 18px 16px; }
+  h1 { font-size: 26px; }
+}
+</style>
+</head>
+<body>
+<aside id="panel">
+  <div>
+    <div class="badge">#30DayMapChallenge 2026 &middot; Day 13: Interactions</div>
+    <h1>Follow the Tea</h1>
+    <p class="lede">Where the world's five biggest tea exporters sell their tea. Click a country on the map, or an exporter below, to see its trade partners.</p>
+  </div>
+  <div>
+    <h2>Exporters</h2>
+    <div class="chips" id="chips"></div>
+  </div>
+  <button id="reset" hidden>Show all flows</button>
+  <div id="detail"></div>
+  <div class="foot">
+    Data: <a href="https://comtradeplus.un.org" target="_blank" rel="noopener">UN Comtrade</a>, HS 0902 tea exports by partner, net weight
+    (2024; Vietnam 2023). Basemap: <a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a>.
+    Map by Jyoti (@geo_tei). Boundaries are for illustration only.
+  </div>
+</aside>
+<main id="map">
+  <div class="hint" id="hint">Showing corridors over 1,000 t &middot; click a country for all its trade &middot; scroll to zoom</div>
+</main>
+
+<script>
+const DATA = __DATA__;
+// Optional ?theme=light or ?theme=dark in the URL overrides the system theme
+const themeParam = new URLSearchParams(location.search).get('theme');
+if (themeParam === 'light' || themeParam === 'dark') document.documentElement.dataset.theme = themeParam;
+const {places, flows, exporters, countries} = DATA;
+
+// ---------- helpers ----------
+const fmtT = t => t >= 1000 ? `${Math.round(t).toLocaleString('en-US')} t` : `${t.toFixed(0)} t`;
+const fmtUSD = v => v >= 1e6 ? `US$${(v / 1e6).toFixed(v >= 1e8 ? 0 : 1)}M` : `US$${Math.round(v / 1e3)}K`;
+const nameOf = iso => places[iso] ? places[iso].name : iso;
+const isExporter = iso => exporters.includes(iso);
+const maxT = Math.max(...flows.map(f => f.t));
+const sum = arr => arr.reduce((a, b) => a + b, 0);
+
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+function hexToRgb(hex) {
+  const n = parseInt(hex.replace('#', ''), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+let theme = {};
+function readTheme() {
+  theme = {
+    land: hexToRgb(cssVar('--land')), edge: hexToRgb(cssVar('--land-edge')),
+    hover: hexToRgb(cssVar('--land-hover')), active: hexToRgb(cssVar('--land-active')),
+    text: hexToRgb(cssVar('--text-primary')), page: hexToRgb(cssVar('--page')),
+    arcAlpha: Number(cssVar('--arc-alpha')),
+    series: Object.fromEntries(exporters.map((iso, i) => [iso, cssVar(`--s${i + 1}`)])),
+  };
+}
+const seriesRgb = iso => hexToRgb(theme.series[iso]);
+
+// ---------- state ----------
+let selected = null;   // ISO3 of the selected country, or null
+
+function flowsFor(iso) {
+  return {
+    out: flows.filter(f => f.o === iso).sort((a, b) => b.t - a.t),
+    in: flows.filter(f => f.d === iso).sort((a, b) => b.t - a.t),
+  };
+}
+
+// ---------- panel ----------
+function renderChips() {
+  const el = document.getElementById('chips');
+  el.innerHTML = '';
+  for (const iso of exporters) {
+    const total = sum(flows.filter(f => f.o === iso).map(f => f.t));
+    const b = document.createElement('button');
+    b.className = 'chip';
+    b.setAttribute('aria-pressed', String(selected === iso));
+    b.innerHTML = `<span class="dot" style="background:${theme.series[iso]}"></span>${nameOf(iso)} <small>${Math.round(total / 1000)}k t</small>`;
+    b.onclick = () => select(selected === iso ? null : iso);
+    el.appendChild(b);
+  }
+}
+
+function rowsHtml(list, partnerKey, colourKey, total, limit = 12) {
+  const top = list[0] ? list[0].t : 1;
+  const rows = list.slice(0, limit).map(f => {
+    const partner = f[partnerKey];
+    const colour = theme.series[f[colourKey]];
+    const pct = f.t / total * 100;
+    const share = total ? ` &middot; ${pct < 0.1 ? '&lt;0.1' : pct.toFixed(pct < 10 || (pct > 99.5 && pct < 100) ? 1 : 0)}%` : '';
+    return `<li class="row" data-iso="${partner}">
+      <div class="name"><span class="dot" style="background:${colour}"></span><span>${nameOf(partner)}</span></div>
+      <div class="val">${fmtT(f.t)}${share}</div>
+      <div class="bar"><i style="width:${Math.max(1, f.t / top * 100)}%;background:${colour}"></i></div>
+    </li>`;
+  }).join('');
+  const more = list.length > limit ? `<div class="more">and ${list.length - limit} more</div>` : '';
+  return `<ul class="rows">${rows}</ul>${more}`;
+}
+
+function renderDetail() {
+  const el = document.getElementById('detail');
+  document.getElementById('reset').hidden = selected === null;
+  document.getElementById('reset').onclick = () => select(null);
+
+  if (selected === null) {
+    const top = [...flows].sort((a, b) => b.t - a.t).slice(0, 10);
+    const tTop = top[0].t;
+    el.innerHTML = `<h2>Biggest tea corridors</h2>
+      <ul class="rows">${top.map(f => `<li class="row" data-iso="${f.d}">
+        <div class="name"><span class="dot" style="background:${theme.series[f.o]}"></span><span>${nameOf(f.o)} &rarr; ${nameOf(f.d)}</span></div>
+        <div class="val">${fmtT(f.t)}</div>
+        <div class="bar"><i style="width:${f.t / tTop * 100}%;background:${theme.series[f.o]}"></i></div>
+      </li>`).join('')}</ul>`;
+  } else {
+    const {out, in: inn} = flowsFor(selected);
+    let html = '';
+    if (out.length) {
+      const total = sum(out.map(f => f.t));
+      html += `<div class="section"><h2>${nameOf(selected)} sells to</h2>
+        <p class="summary"><b>${fmtT(total)}</b> to <b>${out.length}</b> countries</p>
+        ${rowsHtml(out, 'd', 'o', total)}</div>`;
+    }
+    if (inn.length) {
+      const total = sum(inn.map(f => f.t));
+      html += `<div class="section"><h2>${nameOf(selected)} buys from</h2>
+        <p class="summary"><b>${fmtT(total)}</b> from the five big exporters</p>
+        ${rowsHtml(inn, 'o', 'o', total, 5)}</div>`;
+    }
+    if (!html) html = `<p class="summary">No recorded tea trade with the five big exporters.</p>`;
+    el.innerHTML = html;
+  }
+  el.querySelectorAll('.row').forEach(r => r.onclick = () => select(r.dataset.iso));
+}
+
+// ---------- map ----------
+const mapEl = document.getElementById('map');
+
+function fitZoom() {
+  const w = mapEl.clientWidth, h = mapEl.clientHeight;
+  return Math.log2(Math.min(w / 345, h / 150));
+}
+
+const deckgl = new deck.Deck({
+  parent: mapEl,
+  views: new deck.OrthographicView({flipY: false}),
+  initialViewState: {target: [5, 12, 0], zoom: fitZoom(), minZoom: fitZoom() - 0.5, maxZoom: 6},
+  controller: {dragRotate: false},
+  getCursor: ({isHovering}) => isHovering ? 'pointer' : 'grab',
+  onClick: info => { if (!info.object) select(null); },
+  getTooltip,
+});
+
+function getTooltip({object, layer}) {
+  if (!object || !layer) return null;
+  if (layer.id === 'flows') {
+    const f = object;
+    return {html: `<div class="tt-title"><span class="dot" style="background:${theme.series[f.o]}"></span>${nameOf(f.o)} &rarr; ${nameOf(f.d)}</div>
+      <div class="tt-sub">${fmtT(f.t)} &middot; ${fmtUSD(f.usd)} (${f.year})</div>`};
+  }
+  const iso = layer.id === 'countries' ? object.properties.iso : object.iso;
+  if (!places[iso]) return {html: `<div class="tt-title">${object.properties ? object.properties.name : iso}</div><div class="tt-sub">No recorded trade</div>`};
+  const {out, in: inn} = flowsFor(iso);
+  const lines = [];
+  if (out.length) lines.push(`Exports ${fmtT(sum(out.map(f => f.t)))} to ${out.length} countries`);
+  if (inn.length) lines.push(`Imports ${fmtT(sum(inn.map(f => f.t)))} from ${inn.length} of the big five`);
+  return {html: `<div class="tt-title">${nameOf(iso)}</div><div class="tt-sub">${lines.join('<br>')}</div>`};
+}
+
+const MIN_DEFAULT_T = 1000;   // with nothing selected, only corridors this big are drawn
+function flowVisible(f) {
+  if (selected === null) return f.t >= MIN_DEFAULT_T;
+  return f.o === selected || f.d === selected;
+}
+
+function layers() {
+  const width = f => 0.6 + 9 * Math.sqrt(f.t / maxT);
+  const nodes = Object.entries(places).map(([iso, p]) => ({iso, ...p}));
+  const exporterNodes = nodes.filter(n => isExporter(n.iso));
+  const partners = selected ? new Set(flows.filter(flowVisible).flatMap(f => [f.o, f.d])) : null;
+
+  return [
+    new deck.GeoJsonLayer({
+      id: 'countries',
+      data: countries,
+      pickable: true,
+      stroked: true,
+      filled: true,
+      lineWidthUnits: 'pixels',
+      getLineWidth: 0.6,
+      getLineColor: theme.edge,
+      getFillColor: d => d.properties.iso === selected ? theme.active : theme.land,
+      autoHighlight: true,
+      highlightColor: [...theme.hover, 255],
+      onClick: info => select(places[info.object.properties.iso] ? info.object.properties.iso : null),
+      updateTriggers: {getFillColor: [selected, theme]},
+    }),
+    new deck.PathLayer({
+      id: 'flows',
+      data: flows,   // sorted small -> large, so big corridors draw on top
+      pickable: true,
+      widthUnits: 'pixels',
+      capRounded: true,
+      jointRounded: true,
+      getPath: f => f.path,
+      getWidth: f => flowVisible(f) ? width(f) : 0,
+      getColor: f => [...seriesRgb(f.o), selected ? 235 : theme.arcAlpha],
+      autoHighlight: true,
+      highlightColor: [...theme.text, 230],
+      onClick: info => select(info.object.d === selected ? info.object.o : info.object.d),
+      updateTriggers: {getWidth: [selected], getColor: [selected, theme]},
+    }),
+    new deck.ScatterplotLayer({
+      id: 'importers',
+      data: nodes.filter(n => !isExporter(n.iso)),
+      pickable: true,
+      radiusUnits: 'pixels',
+      getPosition: n => [n.lon, n.lat],
+      getRadius: n => (partners && partners.has(n.iso)) || n.iso === selected ? 3.5 : 2,
+      getFillColor: n => [...theme.text, partners && !partners.has(n.iso) ? 60 : 200],
+      stroked: true,
+      lineWidthUnits: 'pixels',
+      getLineWidth: 1,
+      getLineColor: theme.page,
+      onClick: info => select(info.object.iso),
+      updateTriggers: {getRadius: [selected], getFillColor: [selected, theme], getLineColor: [theme]},
+    }),
+    new deck.ScatterplotLayer({
+      id: 'exporters',
+      data: exporterNodes,
+      pickable: true,
+      radiusUnits: 'pixels',
+      getPosition: n => [n.lon, n.lat],
+      getRadius: 6,
+      getFillColor: n => seriesRgb(n.iso),
+      stroked: true,
+      lineWidthUnits: 'pixels',
+      getLineWidth: 2,
+      getLineColor: theme.page,
+      onClick: info => select(info.object.iso),
+      updateTriggers: {getFillColor: [theme], getLineColor: [theme]},
+    }),
+    new deck.TextLayer({
+      id: 'labels',
+      data: selected && !isExporter(selected) ? [...exporterNodes, {iso: selected, ...places[selected]}] : exporterNodes,
+      getPosition: n => [n.lon, n.lat],
+      getText: n => n.name,
+      getSize: 13,
+      getColor: theme.text,
+      getPixelOffset: [9, 0],
+      getTextAnchor: 'start',
+      getAlignmentBaseline: 'center',
+      fontFamily: 'Inter, system-ui, sans-serif',
+      fontWeight: 600,
+      outlineWidth: 3,
+      outlineColor: [...theme.page, 255],
+      fontSettings: {sdf: true},
+      updateTriggers: {getColor: [theme], outlineColor: [theme]},
+    }),
+  ];
+}
+
+function render() {
+  deckgl.setProps({layers: layers()});
+  renderChips();
+  renderDetail();
+}
+
+function select(iso) {
+  selected = iso;
+  history.replaceState(null, '', iso ? `#${iso}` : location.pathname + location.search);
+  document.getElementById('hint').textContent = iso
+    ? `All tea trade of ${nameOf(iso)} with the five big exporters \u00b7 Esc to reset`
+    : 'Showing corridors over 1,000 t \u00b7 click a country for all its trade \u00b7 scroll to zoom';
+  render();
+}
+
+// Re-read colours when the light/dark theme changes
+function refreshTheme() { readTheme(); render(); }
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', refreshTheme);
+new MutationObserver(refreshTheme).observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme']});
+window.addEventListener('keydown', e => { if (e.key === 'Escape') select(null); });
+
+readTheme();
+const fromHash = location.hash.slice(1).toUpperCase();
+select(places[fromHash] ? fromHash : null);
+</script>
+</body>
+</html>
