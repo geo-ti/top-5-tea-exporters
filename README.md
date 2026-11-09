@@ -2,6 +2,8 @@
 
 #30DayMapChallenge 2026, Day 13: **Interactions**
 
+**Live interactive map:** https://geo-ti.github.io/top-5-tea-exporters/V2/day13_follow_the_tea.html
+
 Tea exports from the world's five biggest exporters (Kenya, China, India, Sri Lanka and Vietnam) to more than 170 countries, from UN Comtrade trade data (HS 0902). Two versions of the map are included:
 
 | | V2: Follow the Tea (interactive) | V1: Defying Distance (static) |
